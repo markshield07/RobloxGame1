@@ -227,31 +227,31 @@ end)
 -- ================================
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-
 	-- Block gameplay input while class selection, badges, or revive screen are open
 	if ClassSelectionUI.isOpen() or BadgeLobbyUI.isOpen() or ReviveUI.isOpen() then return end
 
 	if input.UserInputType == Enum.UserInputType.Keyboard then
 		local key = input.KeyCode
 
-		-- Tab: toggle inventory
-		if key == Enum.KeyCode.Tab then
+		-- I: toggle inventory (works even if gameProcessed)
+		if key == Enum.KeyCode.I then
 			if CraftingUI.isOpen() then
 				CraftingUI.close()
 			end
 			InventoryUI.toggle(gameState.inventory)
+			return
 
-		-- B: open badges
+		-- B: open badges (works even if gameProcessed)
 		elseif key == Enum.KeyCode.B then
 			if BadgeLobbyUI.isOpen() then
 				BadgeLobbyUI.close()
 			else
 				Remotes.OpenBadges:FireServer()
 			end
+			return
 
-		-- C: close any open UI
-		elseif key == Enum.KeyCode.C then
+		-- X: close any open UI (works even if gameProcessed)
+		elseif key == Enum.KeyCode.X then
 			if DialogueUI.isOpen() then
 				DialogueUI.close()
 			elseif CraftingUI.isOpen() then
@@ -261,6 +261,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			elseif BadgeLobbyUI.isOpen() then
 				BadgeLobbyUI.close()
 			end
+			return
+		end
+
+		-- All other keys respect gameProcessed (don't fire when typing in chat etc.)
+		if gameProcessed then return end
 
 		-- E: interact (loot containers, food nodes, campfire cooking)
 		elseif key == Enum.KeyCode.E then
