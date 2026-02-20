@@ -22,6 +22,7 @@ local CraftingUI = require(script.UI.CraftingUI)
 local InventoryUI = require(script.UI.InventoryUI)
 local CameraController = require(script.Camera.CameraController)
 local InteractionDetector = require(script.Input.InteractionDetector)
+local DialogueUI = require(script.UI.DialogueUI)
 
 -- ================================
 -- STATE
@@ -53,15 +54,19 @@ Remotes.StormStateChanged.OnClientEvent:Connect(function(data)
 	-- Update UI
 	StormUI.updateStormState(gameState)
 
-	-- Trigger state-specific effects
+	-- Trigger state-specific effects using new unified setState API
 	if data.state == "storm" then
-		WeatherRenderer.startStorm(data.stormType, data.stateInfo.intensity)
+		WeatherRenderer.setState("storm", data.stormType, data.stateInfo and data.stateInfo.intensity or 1.0)
 		CameraController.setStormMode(true)
+		CameraController.screenShake(0.5, 3) -- rumble on storm start
+	elseif data.state == "warning" then
+		WeatherRenderer.setState("warning", data.stormType, 1.0)
+		CameraController.setStormMode(false)
 	elseif data.state == "calm" then
-		WeatherRenderer.clearWeather()
+		WeatherRenderer.setState("calm")
 		CameraController.setStormMode(false)
 	elseif data.state == "aftermath" then
-		WeatherRenderer.startAftermath()
+		WeatherRenderer.setState("aftermath")
 		CameraController.setStormMode(false)
 	end
 end)
@@ -138,9 +143,13 @@ end)
 -- ================================
 
 Remotes.NPCDialogue.OnClientEvent:Connect(function(data)
-	-- Show NPC dialogue as a notification for now
-	local text = (data.npcId or "NPC") .. ": " .. (data.text or "...")
-	StormUI.showNotification(text, true)
+	-- Show proper dialogue UI with NPC name and trades
+	if data.npcName and data.text then
+		DialogueUI.open(data.npcId, data.npcName, data.text, data.trades)
+	else
+		local text = (data.npcId or "NPC") .. ": " .. (data.text or "...")
+		StormUI.showNotification(text, true)
+	end
 end)
 
 -- ================================
@@ -178,9 +187,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			end
 			InventoryUI.toggle(gameState.inventory)
 
-		-- C: close any open UI (acts as escape for crafting)
+		-- C: close any open UI (acts as escape for crafting/dialogue)
 		elseif key == Enum.KeyCode.C then
-			if CraftingUI.isOpen() then
+			if DialogueUI.isOpen() then
+				DialogueUI.close()
+			elseif CraftingUI.isOpen() then
 				CraftingUI.close()
 			elseif InventoryUI.isOpen() then
 				InventoryUI.close()
@@ -281,6 +292,7 @@ local function initialize()
 	CraftingUI.init()
 	InventoryUI.init()
 	InteractionDetector.init()
+	DialogueUI.init()
 
 	-- Request current game state from server
 	requestGameState()

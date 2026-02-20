@@ -384,7 +384,40 @@ end)
 remotes.TalkToNPC.OnServerEvent:Connect(function(player, npcId)
 	local success, dialogue = interactionSystem:talkToNPC(player, npcId)
 	if success and dialogue then
-		remotes.NPCDialogue:FireClient(player, { npcId = npcId, text = dialogue })
+		-- Send full NPC data for the dialogue UI
+		local npcStates = npcManager:getAllNPCStates()
+		local npcState = npcStates[npcId]
+		local npcName = npcState and npcState.name or npcId
+
+		-- Get trade data if NPC is active/rescued
+		local trades = nil
+		local npcData = npcManager.npcs[npcId]
+		if npcData and (npcData.state == "active" or npcData.state == "rescued") and npcData.trades then
+			trades = npcData.trades
+		end
+
+		remotes.NPCDialogue:FireClient(player, {
+			npcId = npcId,
+			npcName = npcName,
+			text = dialogue,
+			trades = trades,
+		})
+	end
+end)
+
+-- Trade with NPC
+local tradeWithNPCRemote = remotes:FindFirstChild("TradeWithNPC")
+if not tradeWithNPCRemote then
+	tradeWithNPCRemote = Instance.new("RemoteEvent")
+	tradeWithNPCRemote.Name = "TradeWithNPC"
+	tradeWithNPCRemote.Parent = remotes
+end
+
+tradeWithNPCRemote.OnServerEvent:Connect(function(player, npcId, tradeId)
+	local success, msg = interactionSystem:tradeWithNPC(player, npcId, tradeId)
+	remotes.Notification:FireClient(player, { text = msg, success = success })
+	if success then
+		remotes.InventoryUpdate:FireClient(player, inventoryManager:getInventory(player.UserId))
 	end
 end)
 
