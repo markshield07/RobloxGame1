@@ -18,7 +18,8 @@ local DATASTORE_NAME = "99Storms_PlayerData_v1"
 local DEFAULT_DATA = {
 	-- Session stats (reset each game)
 	currentStorm = 0,
-	classId = "weatherman",
+	currentDay = 0,
+	classId = "craftsman",
 	rescuedNPCs = {},
 	claimedHouse = nil,
 
@@ -30,11 +31,15 @@ local DEFAULT_DATA = {
 	totalFishCaught = 0,
 	totalItemsCrafted = 0,
 	totalAnimalsTamed = 0,
+	totalLootContainersSearched = 0,
 	bestStormReached = 0,
+	bestDayReached = 0,
+	highestFortTier = 0,
+	bossesDefeated = 0,
 	fastestCompletion = 0, -- seconds (0 = never completed)
 
 	-- Unlocks
-	ownedClasses = { "weatherman" },
+	ownedClasses = { "craftsman", "scout", "medic", "warrior", "stormchaser" },
 	badges = {},
 
 	-- Currency
@@ -193,29 +198,102 @@ function ProgressionManager:onGameComplete(player: Player, completionTime: numbe
 	end
 end
 
--- Check and award milestone badges
-function ProgressionManager:checkMilestones(player: Player, stormNumber: number)
+-- Record a day survived
+function ProgressionManager:onDaySurvived(player: Player, dayNumber: number)
 	local data = self.playerData[player.UserId]
 	if not data then return end
 
-	local milestones = {
-		{ storm = 1,  badge = "first_storm",    name = "Storm Survivor" },
-		{ storm = 10, badge = "ten_storms",      name = "Weathered" },
-		{ storm = 25, badge = "first_boss",      name = "Tempest's Wrath I" },
-		{ storm = 50, badge = "fifty_storms",    name = "Stormhaven Veteran" },
-		{ storm = 50, badge = "second_boss",     name = "Tempest's Wrath II" },
-		{ storm = 75, badge = "seventy_five",    name = "Into The Maelstrom" },
-		{ storm = 75, badge = "third_boss",      name = "Tempest's Wrath III" },
-		{ storm = 99, badge = "game_complete",   name = "Curse Breaker" },
-	}
+	data.currentDay = dayNumber
 
-	for _, milestone in milestones do
-		if stormNumber >= milestone.storm and not table.find(data.badges, milestone.badge) then
-			table.insert(data.badges, milestone.badge)
-			-- Fire badge earned event
-			-- TODO: Connect to badge service
+	if dayNumber > data.bestDayReached then
+		data.bestDayReached = dayNumber
+	end
+
+	self:checkAllBadges(player)
+end
+
+-- Record loot container searched
+function ProgressionManager:onLootSearched(player: Player)
+	local data = self.playerData[player.UserId]
+	if not data then return end
+
+	data.totalLootContainersSearched += 1
+	self:checkAllBadges(player)
+end
+
+-- Record fort tier upgrade
+function ProgressionManager:onFortUpgraded(player: Player, tier: number)
+	local data = self.playerData[player.UserId]
+	if not data then return end
+
+	if tier > data.highestFortTier then
+		data.highestFortTier = tier
+	end
+
+	self:checkAllBadges(player)
+end
+
+-- Record boss defeated
+function ProgressionManager:onBossDefeated(player: Player)
+	local data = self.playerData[player.UserId]
+	if not data then return end
+
+	data.bossesDefeated += 1
+	self:checkAllBadges(player)
+end
+
+-- Check and award milestone badges (uses GameConfig.BADGES)
+function ProgressionManager:checkMilestones(player: Player, stormNumber: number)
+	self:checkAllBadges(player)
+end
+
+-- Comprehensive badge check against all badge definitions
+function ProgressionManager:checkAllBadges(player: Player)
+	local data = self.playerData[player.UserId]
+	if not data then return end
+
+	local newBadges = {}
+
+	for _, badge in GameConfig.BADGES do
+		if table.find(data.badges, badge.id) then
+			continue
+		end
+
+		local earned = false
+		if badge.requirement == "day" then
+			earned = (data.bestDayReached or data.currentDay or 0) >= badge.value
+		elseif badge.requirement == "fort" then
+			earned = (data.highestFortTier or 0) >= badge.value
+		elseif badge.requirement == "loot" then
+			earned = (data.totalLootContainersSearched or 0) >= badge.value
+		elseif badge.requirement == "kills" then
+			earned = (data.totalCreaturesDefeated or 0) >= badge.value
+		elseif badge.requirement == "crafts" then
+			earned = (data.totalItemsCrafted or 0) >= badge.value
+		elseif badge.requirement == "boss" then
+			earned = (data.bossesDefeated or 0) >= badge.value
+		end
+
+		if earned then
+			table.insert(data.badges, badge.id)
+			table.insert(newBadges, badge)
 		end
 	end
+
+	-- Fire badge events for newly earned badges
+	if #newBadges > 0 then
+		local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		if Remotes then
+			for _, badge in newBadges do
+				local milestoneEvent = Remotes:FindFirstChild("MilestoneReached")
+				if milestoneEvent then
+					milestoneEvent:FireClient(player, { badge = badge.id, name = badge.name })
+				end
+			end
+		end
+	end
+
+	return newBadges
 end
 
 -- Check if a zone is unlocked for a player's session

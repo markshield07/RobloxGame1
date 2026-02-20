@@ -43,6 +43,18 @@ local ITEM_DISPLAY = {
 	lantern = { name = "Lantern", icon = "L", color = Color3.fromRGB(255, 200, 80) },
 	fishing_rod = { name = "Fishing Rod", icon = "FR", color = Color3.fromRGB(140, 100, 60) },
 	signal_flare = { name = "Signal Flare", icon = "SF", color = Color3.fromRGB(255, 100, 50) },
+	-- Building materials
+	wooden_boards = { name = "Wood Boards", icon = "WB", color = Color3.fromRGB(160, 120, 70) },
+	reinforced_planks = { name = "Reinforced Planks", icon = "RP", color = Color3.fromRGB(120, 140, 80) },
+	metal_shutters = { name = "Metal Shutters", icon = "MS", color = Color3.fromRGB(160, 165, 170) },
+	storm_glass = { name = "Storm Glass", icon = "SG", color = Color3.fromRGB(120, 180, 220) },
+	storm_crystal_barriers = { name = "Crystal Barriers", icon = "CB", color = Color3.fromRGB(140, 100, 220) },
+	storm_ward = { name = "Storm Ward", icon = "SW", color = Color3.fromRGB(100, 160, 200) },
+	storm_salve = { name = "Storm Salve", icon = "SS", color = Color3.fromRGB(80, 160, 180) },
+	herbal_tea = { name = "Herbal Tea", icon = "HT", color = Color3.fromRGB(100, 180, 80) },
+	-- Rare base items
+	reinforced_core = { name = "Reinforced Core", icon = "RC", color = Color3.fromRGB(220, 180, 60) },
+	ancient_relic = { name = "Ancient Relic", icon = "AR", color = Color3.fromRGB(200, 160, 40) },
 }
 
 -- Items that can be "used" (consumed)
@@ -115,10 +127,10 @@ function InventoryUI.init()
 		InventoryUI.close()
 	end)
 
-	-- Item grid (scrolling)
+	-- Item grid (scrolling) — narrower to make room for sidebar
 	itemGrid = Instance.new("ScrollingFrame")
 	itemGrid.Name = "ItemGrid"
-	itemGrid.Size = UDim2.new(1, -20, 1, -55)
+	itemGrid.Size = UDim2.new(1, -80, 1, -55)
 	itemGrid.Position = UDim2.new(0, 10, 0, 45)
 	itemGrid.BackgroundTransparency = 1
 	itemGrid.BorderSizePixel = 0
@@ -131,6 +143,94 @@ function InventoryUI.init()
 	gridLayout.CellPadding = UDim2.new(0, 5, 0, 5)
 	gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	gridLayout.Parent = itemGrid
+
+	-- =============================
+	-- SIDEBAR ACTION BUTTONS
+	-- =============================
+	local sidebar = Instance.new("Frame")
+	sidebar.Name = "Sidebar"
+	sidebar.Size = UDim2.new(0, 55, 1, -55)
+	sidebar.Position = UDim2.new(1, -60, 0, 45)
+	sidebar.BackgroundTransparency = 1
+	sidebar.Parent = mainFrame
+
+	local sidebarLayout = Instance.new("UIListLayout")
+	sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	sidebarLayout.Padding = UDim.new(0, 6)
+	sidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	sidebarLayout.Parent = sidebar
+
+	-- Helper to create sidebar buttons
+	local function createSidebarButton(name, label, icon, color, order)
+		local btn = Instance.new("TextButton")
+		btn.Name = name
+		btn.Size = UDim2.new(1, 0, 0, 50)
+		btn.BackgroundColor3 = color
+		btn.BackgroundTransparency = 0.2
+		btn.Text = ""
+		btn.LayoutOrder = order
+		btn.BorderSizePixel = 0
+		btn.Parent = sidebar
+
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = btn
+
+		local btnIcon = Instance.new("TextLabel")
+		btnIcon.Size = UDim2.new(1, 0, 0, 28)
+		btnIcon.Position = UDim2.new(0, 0, 0, 2)
+		btnIcon.BackgroundTransparency = 1
+		btnIcon.Text = icon
+		btnIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btnIcon.TextSize = 18
+		btnIcon.Font = Enum.Font.GothamBold
+		btnIcon.Parent = btn
+
+		local btnLabel = Instance.new("TextLabel")
+		btnLabel.Size = UDim2.new(1, 0, 0, 16)
+		btnLabel.Position = UDim2.new(0, 0, 0, 30)
+		btnLabel.BackgroundTransparency = 1
+		btnLabel.Text = label
+		btnLabel.TextColor3 = Color3.fromRGB(200, 210, 230)
+		btnLabel.TextSize = 9
+		btnLabel.Font = Enum.Font.Gotham
+		btnLabel.Parent = btn
+
+		return btn
+	end
+
+	-- Badges button
+	local badgesBtn = createSidebarButton("BadgesBtn", "BADGES", "BDG", Color3.fromRGB(60, 40, 100), 1)
+	badgesBtn.MouseButton1Click:Connect(function()
+		local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		if Remotes and Remotes:FindFirstChild("OpenBadges") then
+			Remotes.OpenBadges:FireServer()
+		end
+	end)
+
+	-- Base Status button
+	local baseBtn = createSidebarButton("BaseBtn", "BASE", "BSE", Color3.fromRGB(40, 80, 50), 2)
+	baseBtn.MouseButton1Click:Connect(function()
+		local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		if Remotes and Remotes:FindFirstChild("OpenBaseStatus") then
+			Remotes.OpenBaseStatus:FireServer()
+		end
+	end)
+
+	-- Class button
+	local classBtn = createSidebarButton("ClassBtn", "CLASS", "CLS", Color3.fromRGB(80, 50, 40), 3)
+	classBtn.MouseButton1Click:Connect(function()
+		local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+		if Remotes and Remotes:FindFirstChild("OpenClassSelect") then
+			Remotes.OpenClassSelect:FireServer()
+		end
+	end)
+
+	-- Map/Loot button
+	local mapBtn = createSidebarButton("MapBtn", "MAP", "MAP", Color3.fromRGB(40, 60, 80), 4)
+	mapBtn.MouseButton1Click:Connect(function()
+		-- Placeholder for minimap/loot finder
+	end)
 end
 
 function InventoryUI.open(inventory: { [string]: number })

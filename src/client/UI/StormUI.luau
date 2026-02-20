@@ -16,6 +16,7 @@ local StormUI = {}
 -- UI references (created in init)
 local screenGui = nil
 local stormHUD = nil
+local dayHUD = nil
 local notificationFrame = nil
 
 -- ================================
@@ -30,7 +31,11 @@ function StormUI.init()
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.Parent = playerGui
 
-	-- Create Storm HUD (top center)
+	-- Create Day Tracker (very top center)
+	dayHUD = StormUI._createDayTracker()
+	dayHUD.Parent = screenGui
+
+	-- Create Storm HUD (below day tracker)
 	stormHUD = StormUI._createStormHUD()
 	stormHUD.Parent = screenGui
 
@@ -44,6 +49,70 @@ function StormUI.init()
 end
 
 -- ================================
+-- DAY TRACKER (Very Top Center)
+-- ================================
+
+function StormUI._createDayTracker(): Frame
+	local frame = Instance.new("Frame")
+	frame.Name = "DayTracker"
+	frame.Size = UDim2.new(0, 200, 0, 40)
+	frame.Position = UDim2.new(0.5, -100, 0, 5)
+	frame.BackgroundColor3 = Color3.fromRGB(15, 20, 30)
+	frame.BackgroundTransparency = 0.2
+	frame.BorderSizePixel = 0
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = frame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 200, 80)
+	stroke.Thickness = 2
+	stroke.Transparency = 0.3
+	stroke.Parent = frame
+
+	-- Sun/Moon icon
+	local icon = Instance.new("TextLabel")
+	icon.Name = "DayIcon"
+	icon.Size = UDim2.new(0, 30, 1, 0)
+	icon.Position = UDim2.new(0, 8, 0, 0)
+	icon.BackgroundTransparency = 1
+	icon.Text = "DAY"
+	icon.TextColor3 = Color3.fromRGB(255, 220, 100)
+	icon.TextSize = 12
+	icon.Font = Enum.Font.GothamBold
+	icon.Parent = frame
+
+	-- Day number
+	local dayLabel = Instance.new("TextLabel")
+	dayLabel.Name = "DayNumber"
+	dayLabel.Size = UDim2.new(0, 60, 1, 0)
+	dayLabel.Position = UDim2.new(0, 38, 0, 0)
+	dayLabel.BackgroundTransparency = 1
+	dayLabel.Text = "1"
+	dayLabel.TextColor3 = Color3.fromRGB(255, 240, 180)
+	dayLabel.TextSize = 28
+	dayLabel.Font = Enum.Font.GothamBold
+	dayLabel.TextXAlignment = Enum.TextXAlignment.Left
+	dayLabel.Parent = frame
+
+	-- Phase indicator
+	local phaseLabel = Instance.new("TextLabel")
+	phaseLabel.Name = "PhaseLabel"
+	phaseLabel.Size = UDim2.new(0, 100, 1, 0)
+	phaseLabel.Position = UDim2.new(1, -105, 0, 0)
+	phaseLabel.BackgroundTransparency = 1
+	phaseLabel.Text = "DAYTIME"
+	phaseLabel.TextColor3 = Color3.fromRGB(100, 200, 120)
+	phaseLabel.TextSize = 14
+	phaseLabel.Font = Enum.Font.GothamBold
+	phaseLabel.TextXAlignment = Enum.TextXAlignment.Right
+	phaseLabel.Parent = frame
+
+	return frame
+end
+
+-- ================================
 -- STORM HUD (Top Center)
 -- ================================
 
@@ -51,7 +120,7 @@ function StormUI._createStormHUD(): Frame
 	local frame = Instance.new("Frame")
 	frame.Name = "StormHUD"
 	frame.Size = UDim2.new(0, 400, 0, 80)
-	frame.Position = UDim2.new(0.5, -200, 0, 10)
+	frame.Position = UDim2.new(0.5, -200, 0, 50)
 	frame.BackgroundColor3 = Color3.fromRGB(20, 25, 35)
 	frame.BackgroundTransparency = 0.3
 	frame.BorderSizePixel = 0
@@ -423,6 +492,98 @@ end
 
 function StormUI.updateBuildingStates(buildingStates)
 	-- TODO: Update building info panel if open
+end
+
+-- ================================
+-- DAY TRACKER UPDATES
+-- ================================
+
+local PHASE_COLORS = {
+	daytime = Color3.fromRGB(100, 200, 120),
+	warning = Color3.fromRGB(255, 200, 60),
+	storm = Color3.fromRGB(255, 80, 80),
+	aftermath = Color3.fromRGB(180, 160, 220),
+}
+
+local PHASE_LABELS = {
+	daytime = "DAYTIME",
+	warning = "WARNING",
+	storm = "STORM",
+	aftermath = "AFTERMATH",
+}
+
+function StormUI.updateDayState(dayInfo)
+	if not dayHUD then return end
+
+	local dayNumber = dayHUD:FindFirstChild("DayNumber")
+	local phaseLabel = dayHUD:FindFirstChild("PhaseLabel")
+	local dayIcon = dayHUD:FindFirstChild("DayIcon")
+
+	if dayNumber then
+		dayNumber.Text = tostring(dayInfo.currentDay or 1)
+	end
+
+	local phase = dayInfo.phase or "daytime"
+
+	if phaseLabel then
+		phaseLabel.Text = PHASE_LABELS[phase] or phase:upper()
+		phaseLabel.TextColor3 = PHASE_COLORS[phase] or Color3.fromRGB(200, 200, 200)
+	end
+
+	-- Pulse effect on storm
+	if dayIcon then
+		if phase == "storm" then
+			dayIcon.TextColor3 = Color3.fromRGB(255, 80, 80)
+		else
+			dayIcon.TextColor3 = Color3.fromRGB(255, 220, 100)
+		end
+	end
+
+	-- Update stroke color based on phase
+	local stroke = dayHUD:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = PHASE_COLORS[phase] or Color3.fromRGB(255, 200, 80)
+	end
+end
+
+-- ================================
+-- PLAYER STATS UPDATE
+-- ================================
+
+function StormUI.updatePlayerStats(stats)
+	if not screenGui then return end
+
+	local statsBar = screenGui:FindFirstChild("StatsBar")
+	if not statsBar then return end
+
+	-- Update health bar
+	local healthBarBg = statsBar:FindFirstChild("HealthLabel")
+	if healthBarBg then
+		local parent = healthBarBg.Parent
+		-- Find the health bar frame (child of bg frame)
+		for _, child in parent:GetChildren() do
+			if child:IsA("Frame") and child.Name ~= "StatsBar" then
+				local bar = child:FindFirstChild("HealthBar")
+				if bar and stats.maxHealth and stats.maxHealth > 0 then
+					bar.Size = UDim2.new(stats.health / stats.maxHealth, 0, 1, 0)
+				end
+			end
+		end
+	end
+
+	-- Update hunger bar
+	for _, child in statsBar:GetChildren() do
+		if child:IsA("Frame") then
+			local hungerBar = child:FindFirstChild("HungerBar")
+			if hungerBar and stats.maxHunger and stats.maxHunger > 0 then
+				hungerBar.Size = UDim2.new(stats.hunger / stats.maxHunger, 0, 1, 0)
+			end
+			local moraleBar = child:FindFirstChild("MoraleBar")
+			if moraleBar and stats.maxMorale and stats.maxMorale > 0 then
+				moraleBar.Size = UDim2.new(stats.morale / stats.maxMorale, 0, 1, 0)
+			end
+		end
+	end
 end
 
 return StormUI

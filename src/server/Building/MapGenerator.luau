@@ -1021,6 +1021,69 @@ function MapGenerator.generate(resourceSystem)
 	createResourceNode(resources, "driftwood", Vector3.new(-20, 60.5, -70), resourceSystem)
 
 	-- ============================
+	-- LOOT CONTAINERS (searchable)
+	-- ============================
+	local lootContainers = Instance.new("Folder")
+	lootContainers.Name = "LootContainers"
+	lootContainers.Parent = map
+
+	local LOOT_COLOR = {
+		common = Color3.fromRGB(120, 100, 70),
+		uncommon = Color3.fromRGB(80, 140, 80),
+		rare = Color3.fromRGB(80, 100, 180),
+		legendary = Color3.fromRGB(180, 140, 50),
+	}
+
+	local lootSpawns = {
+		-- Harbor area (common loot)
+		{ pos = Vector3.new(15, 0.8, 105), rarity = "common" },
+		{ pos = Vector3.new(-25, 0.8, 110), rarity = "common" },
+		{ pos = Vector3.new(40, 0.8, 118), rarity = "common" },
+		{ pos = Vector3.new(55, 0.8, 130), rarity = "common" },
+		-- Main Street alleys (common + uncommon)
+		{ pos = Vector3.new(-60, 0.8, 42), rarity = "common" },
+		{ pos = Vector3.new(35, 0.8, 38), rarity = "uncommon" },
+		{ pos = Vector3.new(-10, 0.8, 55), rarity = "common" },
+		{ pos = Vector3.new(20, 0.8, 55), rarity = "uncommon" },
+		-- Behind buildings
+		{ pos = Vector3.new(-55, 0.8, 28), rarity = "uncommon" },
+		{ pos = Vector3.new(10, 0.8, 28), rarity = "uncommon" },
+		-- Residential Hill (uncommon + rare)
+		{ pos = Vector3.new(-70, 21, -55), rarity = "uncommon" },
+		{ pos = Vector3.new(-40, 21, -40), rarity = "uncommon" },
+		{ pos = Vector3.new(-20, 21, -25), rarity = "rare" },
+		{ pos = Vector3.new(-85, 21, -35), rarity = "uncommon" },
+		-- Near church (rare)
+		{ pos = Vector3.new(-35, 21, -5), rarity = "rare" },
+		-- Rocky Shore (uncommon + rare)
+		{ pos = Vector3.new(90, 0.5, 150), rarity = "uncommon" },
+		{ pos = Vector3.new(-70, 0.5, 155), rarity = "rare" },
+		{ pos = Vector3.new(110, 0.5, 160), rarity = "uncommon" },
+		-- Near lighthouse (rare + legendary)
+		{ pos = Vector3.new(10, 61, -85), rarity = "rare" },
+		{ pos = Vector3.new(-15, 61, -75), rarity = "rare" },
+		{ pos = Vector3.new(0, 61, -95), rarity = "legendary" },
+		-- Hidden spots
+		{ pos = Vector3.new(60, 0.8, 80), rarity = "rare" },
+		{ pos = Vector3.new(-100, 21, -60), rarity = "legendary" },
+	}
+
+	for i, loot in lootSpawns do
+		local color = LOOT_COLOR[loot.rarity] or LOOT_COLOR.common
+		local container = createPart(lootContainers, "LootCrate_" .. i,
+			Vector3.new(2, 1.5, 1.5),
+			loot.pos,
+			color, MATERIALS.wood)
+		container:SetAttribute("Rarity", loot.rarity)
+		container:SetAttribute("LootIndex", i)
+
+		-- Add a subtle glow for rarer containers
+		if loot.rarity == "rare" or loot.rarity == "legendary" then
+			addLight(container, color, 0.5, 8)
+		end
+	end
+
+	-- ============================
 	-- SPAWN POINT
 	-- ============================
 	local spawn = Instance.new("SpawnLocation")

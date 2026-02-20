@@ -11,11 +11,26 @@ GameConfig.GAME_NAME = "99 Storms"
 GameConfig.MAX_PLAYERS = 5
 GameConfig.TOTAL_STORMS = 99
 
--- Timing (seconds)
-GameConfig.CALM_DURATION = 480        -- 8 minutes of calm (daytime)
-GameConfig.STORM_WARNING_DURATION = 60 -- 1 minute warning siren
-GameConfig.STORM_BASE_DURATION = 180   -- 3 minutes base storm duration
-GameConfig.AFTERMATH_DURATION = 120    -- 2 minutes aftermath scavenging
+-- Day Cycle (1 day = 3 real minutes)
+GameConfig.DAY_DURATION = 180          -- 3 minutes per day
+GameConfig.DAYTIME_DURATION = 110      -- ~1:50 of calm (explore/build/gather)
+GameConfig.WARNING_DURATION = 15       -- 15 second storm warning
+GameConfig.STORM_BASE_DURATION_DAY = 40 -- 40 second base storm duration per day
+GameConfig.AFTERMATH_DURATION_DAY = 15  -- 15 second aftermath
+
+-- Legacy timing (used as fallbacks)
+GameConfig.CALM_DURATION = 110
+GameConfig.STORM_WARNING_DURATION = 15
+GameConfig.STORM_BASE_DURATION = 40
+GameConfig.AFTERMATH_DURATION = 15
+
+-- Storm outdoor exposure
+GameConfig.STORM_EXPOSURE = {
+	BASE_DAMAGE_PER_SECOND = 2,    -- base DPS when outside during storm
+	SCALING_PER_DAY = 0.3,          -- extra DPS per day
+	CREATURE_AGGRO_RANGE = 60,     -- creatures prioritize outdoor players
+	SHADOW_SPAWN_CHANCE = 0.15,    -- chance per second to spawn shadow near outdoor player
+}
 
 -- Storm duration scaling (added per storm bracket)
 GameConfig.STORM_DURATION_SCALING = {
@@ -133,66 +148,71 @@ GameConfig.LIGHTHOUSE_LEVELS = {
 	},
 }
 
--- Classes
+-- Classes (all free to choose)
 GameConfig.CLASSES = {
 	{
-		id = "weatherman",
-		name = "Weatherman",
+		id = "craftsman",
+		name = "Craftsman",
 		premium = false,
 		price = 0,
-		tagline = "I can feel it in the air...",
+		tagline = "I'll build us a fortress.",
+		starterItems = { { "storm_crystal", 2 }, { "reinforced_planks", 5 }, { "metal_shutters", 3 }, { "iron_ore", 10 } },
 		abilities = {
-			"Storm Sense: see storm type 30s before warning",
-			"Weather Resistance: 15% reduced weather damage",
-			"Barometer Craft: craft storm intensity tracker",
-			"Wind Reader: less affected by wind push",
+			"Master Builder: craft 50% faster",
+			"Rare Materials: start with rare base upgrade materials",
+			"Structural Insight: see building weak points",
+			"Fortify Mastery: fortifications have 25% more HP",
 		},
 	},
 	{
-		id = "captain",
-		name = "Captain",
-		premium = true,
-		price = 349,
-		tagline = "The sea is in my blood.",
+		id = "scout",
+		name = "Scout",
+		premium = false,
+		price = 0,
+		tagline = "I know every inch of this land.",
+		starterItems = { { "lantern", 1 }, { "signal_flare", 3 }, { "herbs", 5 }, { "rope", 8 } },
 		abilities = {
-			"Master Sailor: boats 40% faster, sail in storms",
-			"Net Fisher: double fishing catches",
-			"Sea Legs: immune to wave/wind knockback",
-			"Anchor Down: create temp safe zone on any boat",
+			"Eagle Eye: see loot containers through walls (glow)",
+			"Swift Feet: 20% faster movement speed",
+			"Scavenger: find 50% more items from containers",
+			"Pathfinder: minimap shows nearby resources",
 		},
 	},
 	{
-		id = "builder",
-		name = "Builder",
-		premium = true,
-		price = 349,
-		tagline = "This town will stand.",
+		id = "medic",
+		name = "Medic",
+		premium = false,
+		price = 0,
+		tagline = "Nobody dies on my watch.",
+		starterItems = { { "medical_kit", 3 }, { "bandage", 5 }, { "herbal_tea", 3 }, { "herbs", 10 } },
 		abilities = {
-			"Fortify: structures have 50% more HP",
-			"Quick Repair: 3x faster repairs",
-			"Blueprint Vision: see structural weak points",
-			"Storm Shelter: build emergency bunkers anywhere",
+			"Field Medic: healing items are 50% more effective",
+			"Triage: revive downed teammates 2x faster",
+			"Immunity: 30% resistance to poison and freeze",
+			"Adrenaline: sprint doesn't drain stamina when teammate is down",
 		},
 	},
 	{
-		id = "keeper",
-		name = "Keeper",
-		premium = true,
-		price = 349,
-		tagline = "The light must never go out.",
+		id = "warrior",
+		name = "Warrior",
+		premium = false,
+		price = 0,
+		tagline = "Let them come.",
+		starterItems = { { "iron_sword", 1 }, { "bandage", 3 }, { "scrap_metal", 8 } },
 		abilities = {
-			"Lighthouse Bond: beam 25% wider when inside",
-			"NPC Whisperer: better trades and more hints",
-			"Town Management: assign NPCs to auto-tasks",
-			"Beacon Craft: portable mini safe zones",
+			"Battle Hardened: +25 max HP",
+			"Heavy Strikes: deal 40% more damage to creatures",
+			"Storm Armor: take 20% less damage from all sources",
+			"Last Stand: when below 20% HP, deal double damage",
 		},
 	},
 	{
 		id = "stormchaser",
 		name = "Stormchaser",
-		premium = true,
-		price = 499,
+		premium = false,
+		price = 0,
 		tagline = "Into the eye.",
+		starterItems = { { "storm_crystal", 1 }, { "storm_salve", 2 }, { "rope", 5 } },
 		abilities = {
 			"Storm Harvest: collect Storm Crystals during storms",
 			"Lightning Rod: absorb strikes to charge weapons",
@@ -200,6 +220,78 @@ GameConfig.CLASSES = {
 			"Eye of the Storm: brief invulnerability at peak",
 		},
 	},
+}
+
+-- Loot container configuration
+GameConfig.LOOT_TABLES = {
+	common = {
+		{ id = "wood", min = 2, max = 5, weight = 30 },
+		{ id = "stone", min = 2, max = 4, weight = 25 },
+		{ id = "rope", min = 1, max = 3, weight = 20 },
+		{ id = "cloth", min = 1, max = 3, weight = 20 },
+		{ id = "raw_fish", min = 1, max = 2, weight = 15 },
+		{ id = "bandage", min = 1, max = 2, weight = 10 },
+	},
+	uncommon = {
+		{ id = "scrap_metal", min = 2, max = 5, weight = 25 },
+		{ id = "iron_ore", min = 1, max = 3, weight = 20 },
+		{ id = "copper_wire", min = 1, max = 3, weight = 15 },
+		{ id = "oil", min = 1, max = 2, weight = 15 },
+		{ id = "medical_kit", min = 1, max = 1, weight = 10 },
+		{ id = "cooked_fish", min = 1, max = 2, weight = 10 },
+		{ id = "wooden_boards", min = 2, max = 4, weight = 15 },
+	},
+	rare = {
+		{ id = "storm_crystal", min = 1, max = 2, weight = 15 },
+		{ id = "reinforced_planks", min = 2, max = 4, weight = 20 },
+		{ id = "metal_shutters", min = 1, max = 2, weight = 15 },
+		{ id = "storm_glass", min = 1, max = 2, weight = 10 },
+		{ id = "storm_blade", min = 1, max = 1, weight = 5 },
+		{ id = "iron_sword", min = 1, max = 1, weight = 10 },
+		{ id = "storm_salve", min = 1, max = 2, weight = 10 },
+		{ id = "storm_ward", min = 1, max = 1, weight = 8 },
+	},
+	legendary = {
+		{ id = "storm_crystal_barriers", min = 1, max = 2, weight = 20 },
+		{ id = "storm_crystal", min = 2, max = 4, weight = 25 },
+		{ id = "reinforced_core", min = 1, max = 1, weight = 15 },
+		{ id = "ancient_relic", min = 1, max = 1, weight = 10 },
+		{ id = "storm_blade", min = 1, max = 1, weight = 10 },
+		{ id = "storm_ward", min = 2, max = 3, weight = 15 },
+	},
+}
+
+-- Base improvement rare items
+GameConfig.BASE_IMPROVEMENTS = {
+	reinforced_core = {
+		name = "Reinforced Core",
+		description = "Doubles base wall HP permanently",
+		hpMultiplier = 2.0,
+	},
+	ancient_relic = {
+		name = "Ancient Relic",
+		description = "Base takes 30% less storm damage",
+		damageReduction = 0.3,
+	},
+	storm_ward = {
+		name = "Storm Ward",
+		description = "Creates a protection field, reduces exposure damage near base",
+		shieldRadius = 20,
+	},
+}
+
+-- Badge definitions
+GameConfig.BADGES = {
+	{ id = "first_day",      name = "First Dawn",         description = "Survive Day 1",            requirement = "day", value = 1,  icon = "D1" },
+	{ id = "week_one",       name = "Week One",           description = "Survive 7 days",           requirement = "day", value = 7,  icon = "W1" },
+	{ id = "fortified",      name = "Fortified",          description = "Upgrade base to Tier 2+",  requirement = "fort", value = 2, icon = "FT" },
+	{ id = "scavenger",      name = "Scavenger",          description = "Search 10 loot containers", requirement = "loot", value = 10, icon = "SC" },
+	{ id = "storm_veteran",  name = "Storm Veteran",      description = "Survive 25 days",          requirement = "day", value = 25, icon = "SV" },
+	{ id = "iron_will",      name = "Iron Will",          description = "Survive 50 days",          requirement = "day", value = 50, icon = "IW" },
+	{ id = "creature_slayer",name = "Creature Slayer",    description = "Defeat 50 creatures",      requirement = "kills", value = 50, icon = "CS" },
+	{ id = "master_crafter", name = "Master Crafter",     description = "Craft 25 items",           requirement = "crafts", value = 25, icon = "MC" },
+	{ id = "legendary",      name = "Legendary Survivor", description = "Survive 99 days",          requirement = "day", value = 99, icon = "LS" },
+	{ id = "first_boss",     name = "Boss Slayer",        description = "Survive a Tempest's Wrath", requirement = "boss", value = 1, icon = "BS" },
 }
 
 -- Multiplayer difficulty scaling

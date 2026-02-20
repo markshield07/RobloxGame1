@@ -66,6 +66,10 @@ local MAX_STACKS = {
 	boat_armor_kit = 1, maelstrom_charts = 1,
 	recipe_advanced_fishing = 1, recipe_taming_boost = 1,
 
+	-- Rare base improvement items
+	reinforced_core = 3,  -- doubles wall HP
+	ancient_relic = 1,    -- 30% less storm damage to base
+
 	-- Currency
 	storm_coins = 9999,
 }
@@ -89,7 +93,7 @@ function InventoryManager:initPlayer(userId: number)
 	end
 end
 
--- Give starting items to a new player
+-- Give starting items to a new player (base kit everyone gets)
 function InventoryManager:giveStarterKit(userId: number)
 	self:initPlayer(userId)
 	self:addItem(userId, "wood", 10)
@@ -98,6 +102,20 @@ function InventoryManager:giveStarterKit(userId: number)
 	self:addItem(userId, "cloth", 3)
 	self:addItem(userId, "raw_fish", 2)
 	self:addItem(userId, "bandage", 2)
+end
+
+-- Give class-specific bonus items on top of the starter kit
+function InventoryManager:giveClassItems(userId: number, classId: string)
+	local GameConfig = require(game:GetService("ReplicatedStorage").Shared.Config.GameConfig)
+
+	for _, class in GameConfig.CLASSES do
+		if class.id == classId and class.starterItems then
+			for _, item in class.starterItems do
+				self:addItem(userId, item[1], item[2])
+			end
+			break
+		end
+	end
 end
 
 -- Get max stack size for an item
