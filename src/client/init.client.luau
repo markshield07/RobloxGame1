@@ -233,8 +233,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.Keyboard then
 		local key = input.KeyCode
 
-		-- I: toggle inventory (works even if gameProcessed)
-		if key == Enum.KeyCode.I then
+		-- F: toggle inventory (works even if gameProcessed — F is not used by Roblox)
+		if key == Enum.KeyCode.F then
 			if CraftingUI.isOpen() then
 				CraftingUI.close()
 			end
@@ -268,7 +268,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 
 		-- E: interact (loot containers, food nodes, campfire cooking)
-		elseif key == Enum.KeyCode.E then
+		if key == Enum.KeyCode.E then
 			local target = InteractionDetector.getCurrentTarget()
 			if target then
 				local interactType = target:GetAttribute("InteractType")
