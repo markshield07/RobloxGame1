@@ -1084,6 +1084,159 @@ function MapGenerator.generate(resourceSystem)
 	end
 
 	-- ============================
+	-- ANIMALS (spawn points for huntable wildlife)
+	-- ============================
+	local animalSpawns = Instance.new("Folder")
+	animalSpawns.Name = "AnimalSpawns"
+	animalSpawns.Parent = map
+
+	local animalPositions = {
+		-- Rabbits (near town edges, easy to hunt)
+		{ configId = "rabbit", pos = Vector3.new(60, 0, 60) },
+		{ configId = "rabbit", pos = Vector3.new(-70, 0, 55) },
+		{ configId = "rabbit", pos = Vector3.new(40, 0, 80) },
+		{ configId = "rabbit", pos = Vector3.new(-40, 20, -40) },
+		-- Deer (further out, more skittish)
+		{ configId = "deer", pos = Vector3.new(80, 0, 70) },
+		{ configId = "deer", pos = Vector3.new(-90, 0, 65) },
+		{ configId = "deer", pos = Vector3.new(-60, 20, -55) },
+		-- Boar (aggressive, near wilderness)
+		{ configId = "boar", pos = Vector3.new(100, 0, 80) },
+		{ configId = "boar", pos = Vector3.new(-100, 20, -45) },
+	}
+
+	for i, spawn in animalPositions do
+		local marker = Instance.new("Part")
+		marker.Name = "AnimalSpawn_" .. spawn.configId .. "_" .. i
+		marker.Size = Vector3.new(1, 0.2, 1)
+		marker.Position = spawn.pos
+		marker.Transparency = 1
+		marker.Anchored = true
+		marker.CanCollide = false
+		marker:SetAttribute("AnimalConfigId", spawn.configId)
+		marker.Parent = animalSpawns
+	end
+
+	-- ============================
+	-- FOOD NODES (berry bushes, mushroom patches)
+	-- ============================
+	local foodNodes = Instance.new("Folder")
+	foodNodes.Name = "FoodNodes"
+	foodNodes.Parent = map
+
+	local foodPositions = {
+		-- Berry bushes
+		{ type = "berry_bush", pos = Vector3.new(55, 0, 65), item = "raw_berries" },
+		{ type = "berry_bush", pos = Vector3.new(-60, 0, 70), item = "raw_berries" },
+		{ type = "berry_bush", pos = Vector3.new(30, 0, 85), item = "raw_berries" },
+		{ type = "berry_bush", pos = Vector3.new(-35, 20, -35), item = "raw_berries" },
+		{ type = "berry_bush", pos = Vector3.new(-80, 20, -50), item = "raw_berries" },
+		-- Mushroom patches
+		{ type = "mushroom_patch", pos = Vector3.new(75, 0, 50), item = "raw_mushroom" },
+		{ type = "mushroom_patch", pos = Vector3.new(-85, 0, 45), item = "raw_mushroom" },
+		{ type = "mushroom_patch", pos = Vector3.new(-45, 20, -55), item = "raw_mushroom" },
+		{ type = "mushroom_patch", pos = Vector3.new(20, 60, -70), item = "raw_mushroom" },
+	}
+
+	for i, food in foodPositions do
+		local node = Instance.new("Part")
+		node.Name = "FoodNode_" .. food.type .. "_" .. i
+		node.Anchored = true
+		node.CanCollide = true
+
+		if food.type == "berry_bush" then
+			node.Size = Vector3.new(2.5, 2, 2.5)
+			node.Color = Color3.fromRGB(50, 120, 50)
+			node.Material = Enum.Material.Grass
+			node.Shape = Enum.PartType.Ball
+		elseif food.type == "mushroom_patch" then
+			node.Size = Vector3.new(1.5, 0.8, 1.5)
+			node.Color = Color3.fromRGB(160, 130, 90)
+			node.Material = Enum.Material.SmoothPlastic
+		end
+
+		node.Position = food.pos
+		node:SetAttribute("InteractType", "FoodNode")
+		node:SetAttribute("FoodItem", food.item)
+		node:SetAttribute("IsHarvested", false)
+		node.Parent = foodNodes
+	end
+
+	-- ============================
+	-- EXTRA CAMPFIRES (around the map for cooking/healing)
+	-- ============================
+	local campfiresFolder = Instance.new("Folder")
+	campfiresFolder.Name = "Campfires"
+	campfiresFolder.Parent = map
+
+	local campfirePositions = {
+		Vector3.new(30, 0, 70),    -- near harbor path
+		Vector3.new(-70, 0, 50),   -- near tavern area
+		Vector3.new(-55, 20, -40), -- residential hill
+		Vector3.new(50, 0, 100),   -- harbor
+	}
+
+	for i, pos in campfirePositions do
+		local base = createPart(campfiresFolder, "CampfireBase_" .. i,
+			Vector3.new(3, 0.3, 3), pos + Vector3.new(0, 0.15, 0),
+			COLORS.rock, MATERIALS.rock)
+
+		createPart(campfiresFolder, "CampfireLogs_" .. i,
+			Vector3.new(1.5, 0.5, 1.5), pos + Vector3.new(0, 0.4, 0),
+			COLORS.wood_dark, MATERIALS.wood)
+
+		local firePart = createPart(campfiresFolder, "Campfire_" .. i,
+			Vector3.new(0.8, 0.8, 0.8), pos + Vector3.new(0, 0.7, 0),
+			COLORS.fire_orange, Enum.Material.Neon)
+		firePart:SetAttribute("InteractType", "Campfire")
+		firePart.Transparency = 0.3
+		firePart.CanCollide = false
+
+		addFireEffect(firePart, 4)
+		addLight(firePart, Color3.fromRGB(255, 150, 50), 2, 20)
+	end
+
+	-- ============================
+	-- FOG WALLS (zone barriers, removed when base upgraded)
+	-- ============================
+	local fogWalls = Instance.new("Folder")
+	fogWalls.Name = "FogWalls"
+	fogWalls.Parent = map
+
+	local GameConfig = require(game:GetService("ReplicatedStorage").Shared.Config.GameConfig)
+	for _, zone in GameConfig.MAP_ZONES do
+		if zone.fogWallPosition and zone.fogWallSize then
+			local wall = Instance.new("Part")
+			wall.Name = "FogWall_" .. zone.id
+			wall.Size = zone.fogWallSize
+			wall.Position = zone.fogWallPosition
+			wall.Color = Color3.fromRGB(100, 80, 140)
+			wall.Material = Enum.Material.ForceField
+			wall.Transparency = 0.4
+			wall.Anchored = true
+			wall.CanCollide = true
+			wall:SetAttribute("ZoneId", zone.id)
+			wall:SetAttribute("BaseLevelRequired", zone.baseLevelRequired)
+			wall.Parent = fogWalls
+
+			local fogEmitter = Instance.new("ParticleEmitter")
+			fogEmitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+			fogEmitter.Color = ColorSequence.new(Color3.fromRGB(120, 100, 160))
+			fogEmitter.Size = NumberSequence.new(8, 12)
+			fogEmitter.Lifetime = NumberRange.new(3, 5)
+			fogEmitter.Rate = 5
+			fogEmitter.Speed = NumberRange.new(1, 3)
+			fogEmitter.SpreadAngle = Vector2.new(180, 180)
+			fogEmitter.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.6),
+				NumberSequenceKeypoint.new(0.5, 0.4),
+				NumberSequenceKeypoint.new(1, 0.8),
+			})
+			fogEmitter.Parent = wall
+		end
+	end
+
+	-- ============================
 	-- SPAWN POINT
 	-- ============================
 	local spawn = Instance.new("SpawnLocation")

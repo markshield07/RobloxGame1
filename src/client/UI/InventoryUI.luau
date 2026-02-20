@@ -52,6 +52,14 @@ local ITEM_DISPLAY = {
 	storm_ward = { name = "Storm Ward", icon = "SW", color = Color3.fromRGB(100, 160, 200) },
 	storm_salve = { name = "Storm Salve", icon = "SS", color = Color3.fromRGB(80, 160, 180) },
 	herbal_tea = { name = "Herbal Tea", icon = "HT", color = Color3.fromRGB(100, 180, 80) },
+	-- New food items
+	raw_meat = { name = "Raw Meat", icon = "RM", color = Color3.fromRGB(180, 80, 80) },
+	cooked_meat = { name = "Cooked Meat", icon = "CM", color = Color3.fromRGB(160, 100, 50) },
+	raw_berries = { name = "Raw Berries", icon = "RB", color = Color3.fromRGB(180, 50, 50) },
+	berry_jam = { name = "Berry Jam", icon = "BJ", color = Color3.fromRGB(200, 80, 100) },
+	raw_mushroom = { name = "Raw Mushroom", icon = "MR", color = Color3.fromRGB(160, 130, 90) },
+	mushroom_stew = { name = "Mushroom Stew", icon = "MW", color = Color3.fromRGB(140, 110, 70) },
+	leather = { name = "Leather", icon = "LT", color = Color3.fromRGB(120, 80, 40) },
 	-- Rare base items
 	reinforced_core = { name = "Reinforced Core", icon = "RC", color = Color3.fromRGB(220, 180, 60) },
 	ancient_relic = { name = "Ancient Relic", icon = "AR", color = Color3.fromRGB(200, 160, 40) },
@@ -60,6 +68,8 @@ local ITEM_DISPLAY = {
 -- Items that can be "used" (consumed)
 local USABLE_ITEMS = {
 	raw_fish = true, cooked_fish = true, fish_stew = true,
+	raw_meat = true, cooked_meat = true, raw_berries = true,
+	berry_jam = true, raw_mushroom = true, mushroom_stew = true,
 	clam_chowder = true, herbal_tea = true, storm_feast = true,
 	lobster_dinner = true, bandage = true, medical_kit = true,
 	storm_salve = true, antivenom = true, signal_flare = true,

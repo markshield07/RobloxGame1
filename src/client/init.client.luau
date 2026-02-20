@@ -25,6 +25,7 @@ local InteractionDetector = require(script.Input.InteractionDetector)
 local DialogueUI = require(script.UI.DialogueUI)
 local ClassSelectionUI = require(script.UI.ClassSelectionUI)
 local BadgeLobbyUI = require(script.UI.BadgeLobbyUI)
+local ReviveUI = require(script.UI.ReviveUI)
 
 -- ================================
 -- STATE
@@ -146,6 +147,18 @@ Remotes.ShowBadges.OnClientEvent:Connect(function(playerData)
 end)
 
 -- ================================
+-- DOWNED / REVIVE HANDLERS
+-- ================================
+
+Remotes.PlayerDowned.OnClientEvent:Connect(function(data)
+	ReviveUI.show(data.downedDuration or 30, data.robuxCost or 25)
+end)
+
+Remotes.PlayerRevived.OnClientEvent:Connect(function()
+	ReviveUI.close()
+end)
+
+-- ================================
 -- INVENTORY HANDLERS
 -- ================================
 
@@ -162,6 +175,11 @@ end)
 Remotes.PlayerStats.OnClientEvent:Connect(function(stats)
 	gameState.playerStats = stats
 	StormUI.updatePlayerStats(stats)
+
+	-- Update revive timer if downed
+	if stats.isDowned and ReviveUI.isOpen() then
+		ReviveUI.updateTimer(stats.downedTimer or 0)
+	end
 end)
 
 -- ================================
@@ -211,8 +229,8 @@ end)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
-	-- Block gameplay input while class selection or badges are open
-	if ClassSelectionUI.isOpen() or BadgeLobbyUI.isOpen() then return end
+	-- Block gameplay input while class selection, badges, or revive screen are open
+	if ClassSelectionUI.isOpen() or BadgeLobbyUI.isOpen() or ReviveUI.isOpen() then return end
 
 	if input.UserInputType == Enum.UserInputType.Keyboard then
 		local key = input.KeyCode
@@ -244,7 +262,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 				BadgeLobbyUI.close()
 			end
 
-		-- E: interact (also handles loot containers)
+		-- E: interact (loot containers, food nodes, campfire cooking)
 		elseif key == Enum.KeyCode.E then
 			local target = InteractionDetector.getCurrentTarget()
 			if target then
@@ -256,6 +274,28 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 						Remotes.SearchLoot:FireServer(containerId)
 					elseif isLooted then
 						StormUI.showNotification("Already searched. It will respawn soon.", false)
+					end
+				elseif interactType == "FoodNode" then
+					local isHarvested = target:GetAttribute("IsHarvested")
+					if not isHarvested then
+						Remotes.HarvestFood:FireServer(target.Name)
+					else
+						StormUI.showNotification("Already harvested. Wait for it to regrow.", false)
+					end
+				elseif interactType == "Campfire" then
+					-- Try to cook raw food at the campfire
+					local inv = gameState.inventory
+					local rawItems = { "raw_meat", "raw_fish", "raw_berries", "raw_mushroom" }
+					local cooked = false
+					for _, rawItem in rawItems do
+						if inv[rawItem] and inv[rawItem] > 0 then
+							Remotes.CookFood:FireServer(rawItem)
+							cooked = true
+							break
+						end
+					end
+					if not cooked then
+						Remotes.UseCampfire:FireServer()
 					end
 				end
 			end
@@ -291,13 +331,21 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			end
 		end
 
-	-- Left mouse click: attack nearby creature
+	-- Left mouse click: attack nearby creature or animal
 	elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
 		local target = InteractionDetector.getCurrentTarget()
-		if target and target:GetAttribute("InteractType") == "Creature" then
-			local creatureId = target:GetAttribute("CreatureId")
-			if creatureId then
-				Remotes.AttackCreature:FireServer(creatureId)
+		if target then
+			local interactType = target:GetAttribute("InteractType")
+			if interactType == "Creature" then
+				local creatureId = target:GetAttribute("CreatureId")
+				if creatureId then
+					Remotes.AttackCreature:FireServer(creatureId)
+				end
+			elseif interactType == "Animal" then
+				local animalId = target:GetAttribute("AnimalId")
+				if animalId then
+					Remotes.AttackAnimal:FireServer(animalId)
+				end
 			end
 		end
 	end
@@ -366,6 +414,7 @@ local function initialize()
 	DialogueUI.init()
 	ClassSelectionUI.init()
 	BadgeLobbyUI.init()
+	ReviveUI.init()
 
 	-- Request current game state from server
 	requestGameState()

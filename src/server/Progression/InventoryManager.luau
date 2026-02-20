@@ -17,12 +17,14 @@ local MAX_STACKS = {
 	storm_crystal = 50, coal = 99,
 
 	-- Food raw
-	raw_fish = 30, clam = 30, crab_shell = 30, lobster = 20,
+	raw_fish = 30, raw_meat = 30, raw_berries = 30, raw_mushroom = 30,
+	clam = 30, crab_shell = 30, lobster = 20,
 	herbs = 30, eggs = 20, vegetables = 30, seaweed = 30,
 	bread = 20, frog_legs = 20, bait = 30, deep_sea_bait = 15,
 
 	-- Food cooked
-	cooked_fish = 15, fish_stew = 10, clam_chowder = 10,
+	cooked_fish = 15, cooked_meat = 15, berry_jam = 15, mushroom_stew = 10,
+	fish_stew = 10, clam_chowder = 10,
 	herbal_tea = 10, storm_feast = 5, lobster_dinner = 10,
 
 	-- Medical
@@ -54,6 +56,9 @@ local MAX_STACKS = {
 
 	-- Signal / consumable
 	signal_flare = 10, tempest_lure = 3,
+
+	-- Animal drops
+	leather = 20,
 
 	-- Creature drops
 	ectoplasm = 30, wolf_pelt = 10, frost_fang = 10,
@@ -102,6 +107,7 @@ function InventoryManager:giveStarterKit(userId: number)
 	self:addItem(userId, "cloth", 3)
 	self:addItem(userId, "raw_fish", 2)
 	self:addItem(userId, "bandage", 2)
+	self:addItem(userId, "wooden_club", 1) -- basic weapon for hunting
 end
 
 -- Give class-specific bonus items on top of the starter kit

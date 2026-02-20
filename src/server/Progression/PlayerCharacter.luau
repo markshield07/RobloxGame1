@@ -35,9 +35,12 @@ export type PlayerState = {
 	maxStamina: number,
 	isSprinting: boolean,
 	isSheltered: boolean,
+	isNearCampfire: boolean,
 	isPanicking: boolean,
 	panicTimer: number,
 	isDead: boolean,
+	isDowned: boolean, -- downed state (can be revived)
+	downedTimer: number,
 	respawnTimer: number,
 	statusEffects: { [string]: StatusEffect },
 	classId: string,
@@ -79,12 +82,15 @@ function PlayerCharacter:initPlayer(userId: number, classId: string?)
 		maxStamina = cfg.MAX_STAMINA,
 		isSprinting = false,
 		isSheltered = false,
+		isNearCampfire = false,
 		isPanicking = false,
 		panicTimer = 0,
 		isDead = false,
+		isDowned = false,
+		downedTimer = 0,
 		respawnTimer = 0,
 		statusEffects = {},
-		classId = classId or "weatherman",
+		classId = classId or "craftsman",
 		weatherResistance = weatherResistance,
 	}
 
@@ -102,6 +108,8 @@ function PlayerCharacter:update(deltaTime: number, isStormActive: boolean)
 	for userId, state in self.states do
 		if state.isDead then
 			self:updateDead(state, deltaTime)
+		elseif state.isDowned then
+			self:updateDowned(state, deltaTime)
 		else
 			self:updateAlive(state, deltaTime, isStormActive)
 		end
@@ -163,8 +171,26 @@ function PlayerCharacter:updateAlive(state: PlayerState, deltaTime: number, isSt
 		end
 	end
 
+	-- ====== CAMPFIRE HEALING ======
+	if state.isNearCampfire and not isStormActive then
+		local campCfg = GameConfig.CAMPFIRE
+		-- Heal HP
+		state.health = math.min(state.maxHealth, state.health + campCfg.HEAL_PER_SECOND * deltaTime)
+		-- Morale boost
+		state.morale = math.min(state.maxMorale, state.morale + campCfg.MORALE_BOOST_PER_SECOND * deltaTime)
+	end
+
 	-- ====== APPLY TO CHARACTER ======
 	self:syncToCharacter(state)
+end
+
+-- Update downed state (waiting for revive)
+function PlayerCharacter:updateDowned(state: PlayerState, deltaTime: number)
+	state.downedTimer -= deltaTime
+	if state.downedTimer <= 0 then
+		-- Forced respawn at base with very low HP
+		self:forceRespawn(state)
+	end
 end
 
 function PlayerCharacter:updateDead(state: PlayerState, deltaTime: number)
@@ -205,9 +231,15 @@ function PlayerCharacter:feed(state: PlayerState, hungerAmount: number, moraleBo
 end
 
 function PlayerCharacter:kill(state: PlayerState, source: string?)
-	state.isDead = true
+	-- Enter downed state instead of dying immediately
+	state.isDowned = true
 	state.health = 0
-	state.respawnTimer = GameConfig.PLAYER.RESPAWN_TIME
+	state.downedTimer = GameConfig.REVIVE.DOWNED_DURATION
+
+	-- Notify (player downed, not fully dead)
+	if self.onPlayerDowned then
+		self.onPlayerDowned(state.userId, source)
+	end
 
 	-- Morale penalty for everyone
 	if self.onPlayerDied then
@@ -215,10 +247,13 @@ function PlayerCharacter:kill(state: PlayerState, source: string?)
 	end
 end
 
-function PlayerCharacter:respawn(state: PlayerState)
+-- Force respawn after downed timer expires (no revive happened)
+function PlayerCharacter:forceRespawn(state: PlayerState)
+	state.isDowned = false
 	state.isDead = false
-	state.health = state.maxHealth * 0.5 -- respawn at half health
-	state.hunger = math.max(state.hunger, state.maxHunger * 0.3)
+	state.health = state.maxHealth * (GameConfig.REVIVE.FORCED_RESPAWN_HEALTH or 0.1)
+	state.hunger = math.max(state.hunger, state.maxHunger * 0.2)
+	state.downedTimer = 0
 	state.respawnTimer = 0
 
 	if self.onPlayerRespawned then
@@ -226,16 +261,36 @@ function PlayerCharacter:respawn(state: PlayerState)
 	end
 end
 
--- Revive a downed player (teammate action)
+function PlayerCharacter:respawn(state: PlayerState)
+	state.isDead = false
+	state.isDowned = false
+	state.health = state.maxHealth * 0.5
+	state.hunger = math.max(state.hunger, state.maxHunger * 0.3)
+	state.respawnTimer = 0
+	state.downedTimer = 0
+
+	if self.onPlayerRespawned then
+		self.onPlayerRespawned(state.userId)
+	end
+end
+
+-- Revive a downed player (teammate uses medical kit)
 function PlayerCharacter:revive(state: PlayerState, reviveHealthPercent: number?)
-	reviveHealthPercent = reviveHealthPercent or 0.3
+	reviveHealthPercent = reviveHealthPercent or (GameConfig.REVIVE.REVIVE_HEALTH_PERCENT or 0.3)
+	state.isDowned = false
 	state.isDead = false
 	state.health = state.maxHealth * reviveHealthPercent
+	state.downedTimer = 0
 	state.respawnTimer = 0
 
 	if self.onPlayerRespawned then
 		self.onPlayerRespawned(state.userId)
 	end
+end
+
+-- Robux self-revive
+function PlayerCharacter:robuxRevive(state: PlayerState)
+	self:revive(state, 0.5) -- 50% HP on Robux revive
 end
 
 -- ====== STATUS EFFECTS ======
@@ -343,6 +398,14 @@ function PlayerCharacter:setSheltered(userId: number, sheltered: boolean)
 	state.isSheltered = sheltered
 end
 
+-- ====== CAMPFIRE ======
+
+function PlayerCharacter:setNearCampfire(userId: number, near: boolean)
+	local state = self.states[userId]
+	if not state then return end
+	state.isNearCampfire = near
+end
+
 -- ====== SYNC TO ROBLOX CHARACTER ======
 
 function PlayerCharacter:syncToCharacter(state: PlayerState)
@@ -376,32 +439,31 @@ function PlayerCharacter:syncToCharacter(state: PlayerState)
 end
 
 -- ====== FOOD ITEMS ======
--- Returns: { hunger: number, health: number, morale: number }
-
-local FOOD_VALUES = {
-	cooked_fish =     { hunger = 25, health = 0,  morale = 5 },
-	fish_stew =       { hunger = 40, health = 10, morale = 10 },
-	clam_chowder =    { hunger = 35, health = 5,  morale = 8 },
-	herbal_tea =      { hunger = 5,  health = 5,  morale = 20 },
-	storm_feast =     { hunger = 60, health = 20, morale = 25 },
-	lobster_dinner =  { hunger = 50, health = 10, morale = 15 },
-	raw_fish =        { hunger = 10, health = 0,  morale = -5 },
-}
+-- Now uses GameConfig.FOOD_VALUES — raw food damages, cooked food heals
 
 function PlayerCharacter:consumeFood(userId: number, foodId: string): (boolean, string)
 	local state = self.states[userId]
 	if not state then return false, "Player not found" end
-	if state.isDead then return false, "Cannot eat while dead" end
+	if state.isDead or state.isDowned then return false, "Cannot eat while down" end
 
-	local food = FOOD_VALUES[foodId]
+	local food = GameConfig.FOOD_VALUES[foodId]
 	if not food then return false, "Not a food item" end
 
+	-- Feed hunger + morale
 	self:feed(state, food.hunger, food.morale)
+
+	-- Health: positive = heal, negative = damage from raw food
 	if food.health > 0 then
 		self:heal(state, food.health)
+	elseif food.health < 0 then
+		self:damage(state, math.abs(food.health), "raw_food")
 	end
 
-	return true, "Consumed " .. foodId
+	local displayName = foodId:gsub("_", " ")
+	if food.health < 0 then
+		return true, "Ate " .. displayName .. " (raw food made you sick!)"
+	end
+	return true, "Consumed " .. displayName
 end
 
 -- ====== MEDICAL ITEMS ======
@@ -460,8 +522,11 @@ function PlayerCharacter:getClientState(userId: number)
 		stamina = state.stamina,
 		maxStamina = state.maxStamina,
 		isSheltered = state.isSheltered,
+		isNearCampfire = state.isNearCampfire,
 		isPanicking = state.isPanicking,
 		isDead = state.isDead,
+		isDowned = state.isDowned,
+		downedTimer = state.downedTimer,
 		respawnTimer = state.respawnTimer,
 		statusEffects = effects,
 	}

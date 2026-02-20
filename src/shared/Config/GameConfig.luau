@@ -47,28 +47,35 @@ GameConfig.STORM_TYPES = {
 		id = "thunderstorm",
 		name = "Thunderstorm",
 		unlockStorm = 1,
-		weight = 30,
+		weight = 25,
 		description = "Heavy rain and lightning strikes target high points.",
+	},
+	{
+		id = "snowstorm",
+		name = "Snowstorm",
+		unlockStorm = 3,
+		weight = 20,
+		description = "Freezing temperatures. Stamina drains faster outside.",
 	},
 	{
 		id = "fog",
 		name = "Fog Storm",
 		unlockStorm = 5,
-		weight = 25,
+		weight = 20,
 		description = "Near-zero visibility. Listen for creatures.",
 	},
 	{
 		id = "hurricane",
 		name = "Hurricane",
 		unlockStorm = 10,
-		weight = 20,
+		weight = 15,
 		description = "Extreme wind destroys unfortified structures.",
 	},
 	{
 		id = "hailstorm",
 		name = "Hailstorm",
 		unlockStorm = 20,
-		weight = 15,
+		weight = 12,
 		description = "Constant AOE damage outdoors. Roofs matter.",
 	},
 	{
@@ -96,7 +103,7 @@ GameConfig.STORM_TYPES = {
 		id = "tempest_wrath",
 		name = "The Tempest's Wrath",
 		unlockStorm = 25,
-		weight = 0, -- Special: forced on storms 25, 50, 75
+		weight = 0,
 		description = "The Tempest directly attacks. Boss encounter.",
 	},
 }
@@ -374,6 +381,139 @@ GameConfig.RESCUES = {
 		zone = "maelstrom",
 		unlockStorm = 75,
 		reward = "Counter-ritual begins (final 24 storms)",
+	},
+}
+
+-- ================================
+-- ANIMALS (huntable for food)
+-- ================================
+GameConfig.ANIMALS = {
+	{
+		id = "rabbit",
+		name = "Rabbit",
+		hp = 15,
+		speed = 14,
+		drops = { { id = "raw_meat", min = 1, max = 1 } },
+		size = Vector3.new(1.2, 0.8, 0.8),
+		color = Color3.fromRGB(160, 140, 110),
+		fleeRange = 15,
+		respawnTime = 60,
+	},
+	{
+		id = "deer",
+		name = "Deer",
+		hp = 35,
+		speed = 18,
+		drops = { { id = "raw_meat", min = 2, max = 3 } },
+		size = Vector3.new(2.5, 2.5, 1.5),
+		color = Color3.fromRGB(140, 110, 70),
+		fleeRange = 25,
+		respawnTime = 90,
+	},
+	{
+		id = "boar",
+		name = "Wild Boar",
+		hp = 50,
+		speed = 12,
+		drops = { { id = "raw_meat", min = 2, max = 4 }, { id = "leather", min = 1, max = 1 } },
+		size = Vector3.new(2, 1.5, 1.5),
+		color = Color3.fromRGB(90, 70, 50),
+		fleeRange = 0, -- boar charges instead of fleeing
+		aggressive = true,
+		damage = 8,
+		respawnTime = 120,
+	},
+}
+
+-- ================================
+-- FOOD VALUES (raw vs cooked)
+-- ================================
+-- Negative health = damage when eaten raw
+GameConfig.FOOD_VALUES = {
+	-- Raw items: fill hunger but damage health
+	raw_meat =       { hunger = 15, health = -10, morale = -5, cookResult = "cooked_meat" },
+	raw_fish =       { hunger = 10, health = -5,  morale = -5, cookResult = "cooked_fish" },
+	raw_berries =    { hunger = 8,  health = -3,  morale = 0,  cookResult = "berry_jam" },
+	raw_mushroom =   { hunger = 5,  health = -8,  morale = -3, cookResult = "mushroom_stew" },
+
+	-- Cooked items: restore health and hunger
+	cooked_meat =    { hunger = 35, health = 20,  morale = 10 },
+	cooked_fish =    { hunger = 25, health = 15,  morale = 5 },
+	berry_jam =      { hunger = 15, health = 10,  morale = 8 },
+	mushroom_stew =  { hunger = 20, health = 15,  morale = 12 },
+	fish_stew =      { hunger = 40, health = 20,  morale = 10 },
+	clam_chowder =   { hunger = 35, health = 15,  morale = 8 },
+	herbal_tea =     { hunger = 5,  health = 10,  morale = 20 },
+	storm_feast =    { hunger = 60, health = 30,  morale = 25 },
+	lobster_dinner = { hunger = 50, health = 20,  morale = 15 },
+}
+
+-- ================================
+-- CAMPFIRE
+-- ================================
+GameConfig.CAMPFIRE = {
+	HEAL_PER_SECOND = 2,       -- HP regen per second near campfire
+	PROXIMITY_RANGE = 12,      -- studs from campfire center
+	MORALE_BOOST_PER_SECOND = 0.5,
+	HUNGER_DRAIN_REDUCTION = 0.5, -- 50% slower hunger drain near fire
+}
+
+-- ================================
+-- REVIVE SYSTEM
+-- ================================
+GameConfig.REVIVE = {
+	DOWNED_DURATION = 30,      -- seconds before forced respawn
+	TEAMMATE_REVIVE_TIME = 5,  -- seconds teammate holds to revive
+	TEAMMATE_REVIVE_RANGE = 8, -- studs
+	TEAMMATE_REVIVE_ITEM = "medical_kit", -- item consumed to revive
+	ROBUX_REVIVE_COST = 25,    -- Robux to self-revive
+	REVIVE_HEALTH_PERCENT = 0.3, -- respawn at 30% HP
+	FORCED_RESPAWN_HEALTH = 0.1, -- 10% HP on forced respawn at base
+}
+
+-- ================================
+-- MAP EXPANSION (tied to base level)
+-- ================================
+-- Base level = highest fortification tier on any claimed wall
+-- Each level opens a new zone on the map
+GameConfig.MAP_ZONES = {
+	{
+		id = "starter",
+		name = "Town Center",
+		baseLevelRequired = 0,
+		description = "Main Street and Harbor — always accessible",
+	},
+	{
+		id = "coastal",
+		name = "Coastal Expanse",
+		baseLevelRequired = 1,
+		description = "Rocky Shore and beach areas",
+		fogWallPosition = Vector3.new(0, 10, 150),
+		fogWallSize = Vector3.new(300, 30, 5),
+	},
+	{
+		id = "highlands",
+		name = "The Highlands",
+		baseLevelRequired = 2,
+		description = "Residential Hill and Church",
+		fogWallPosition = Vector3.new(-50, 20, -15),
+		fogWallSize = Vector3.new(200, 30, 5),
+	},
+	{
+		id = "wilderness",
+		name = "The Wilderness",
+		baseLevelRequired = 3,
+		description = "Forest and Marshlands",
+		fogWallPosition = Vector3.new(-120, 10, 0),
+		fogWallSize = Vector3.new(5, 30, 300),
+	},
+	{
+		id = "summit",
+		name = "Lighthouse Summit",
+		baseLevelRequired = 4,
+		description = "Lighthouse peak and surrounding cliffs",
+		fogWallPosition = Vector3.new(0, 50, -60),
+		fogWallSize = Vector3.new(200, 40, 5),
 	},
 }
 

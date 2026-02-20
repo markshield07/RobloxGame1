@@ -153,6 +153,23 @@ local STORM_VISUALS = {
 		colorSaturation = -0.15,
 	},
 
+	snowstorm = {
+		clockTime = 10,
+		brightness = 0.7,
+		ambient = Color3.fromRGB(50, 55, 65),
+		outdoorAmbient = Color3.fromRGB(90, 95, 110),
+		fogEnd = 150,
+		fogColor = Color3.fromRGB(200, 210, 220),
+		atmosphereDensity = 0.6,
+		atmosphereColor = Color3.fromRGB(210, 220, 235),
+		bloomIntensity = 0.8,
+		bloomThreshold = 0.6,
+		colorTint = Color3.fromRGB(220, 230, 255),
+		colorBrightness = -0.02,
+		colorContrast = -0.05,
+		colorSaturation = -0.4,
+	},
+
 	blood_storm = {
 		clockTime = 21,
 		brightness = 0.3,
@@ -265,6 +282,11 @@ local SOUND_VOLUMES = {
 		ambient_calm = 0.0, ambient_wind = 0.1,
 		rain_light = 0.1, rain_heavy = 0.5,
 		wind_storm = 0.5, thunder_rumble = 0.2,
+	},
+	snowstorm = {
+		ambient_calm = 0.0, ambient_wind = 0.3,
+		rain_light = 0.0, rain_heavy = 0.0,
+		wind_storm = 0.5, thunder_rumble = 0.0,
 	},
 	blood_storm = {
 		ambient_calm = 0.0, ambient_wind = 0.2,
@@ -463,12 +485,34 @@ function WeatherRenderer._createParticles()
 	stormSparks.Parent = particlePart
 	particleEmitters.stormSparks = stormSparks
 
+	-- Snow particles
+	local snow = Instance.new("ParticleEmitter")
+	snow.Name = "Snow"
+	snow.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	snow.Color = ColorSequence.new(Color3.fromRGB(240, 245, 255))
+	snow.Size = NumberSequence.new(0.1, 0.05)
+	snow.Lifetime = NumberRange.new(2, 4)
+	snow.Rate = 0
+	snow.Speed = NumberRange.new(10, 25)
+	snow.SpreadAngle = Vector2.new(30, 30)
+	snow.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(0.8, 0.3),
+		NumberSequenceKeypoint.new(1, 0.7),
+	})
+	snow.Acceleration = Vector3.new(0, -8, 0)
+	snow.RotSpeed = NumberRange.new(-60, 60)
+	snow.Rotation = NumberRange.new(0, 360)
+	snow.EmissionDirection = Enum.NormalId.Top
+	snow.Parent = particlePart
+	particleEmitters.snow = snow
+
 	particleEmitters._part = particlePart
 end
 
 function WeatherRenderer._setParticleRates(stormType, intensity)
 	local rates = {
-		rain = 0, hail = 0, fog = 0, debris = 0, bloodMist = 0, stormSparks = 0,
+		rain = 0, hail = 0, fog = 0, debris = 0, bloodMist = 0, stormSparks = 0, snow = 0,
 	}
 
 	if stormType == "thunderstorm" then
@@ -487,6 +531,9 @@ function WeatherRenderer._setParticleRates(stormType, intensity)
 	elseif stormType == "tsunami" then
 		rates.rain = 150 * intensity
 		rates.fog = 3 * intensity
+	elseif stormType == "snowstorm" then
+		rates.snow = 250 * intensity
+		rates.fog = 2 * intensity
 	elseif stormType == "blood_storm" then
 		rates.rain = 80 * intensity
 		rates.bloodMist = 8 * intensity
@@ -506,7 +553,7 @@ function WeatherRenderer._setParticleRates(stormType, intensity)
 
 	-- Aftermath: light drizzle
 	if currentState == "aftermath" then
-		rates = { rain = 20, hail = 0, fog = 1, debris = 0, bloodMist = 0, stormSparks = 0 }
+		rates = { rain = 20, hail = 0, fog = 1, debris = 0, bloodMist = 0, stormSparks = 0, snow = 0 }
 	end
 
 	for name, rate in rates do

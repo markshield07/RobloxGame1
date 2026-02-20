@@ -27,6 +27,7 @@ local CreatureSpawner = require(script.Creatures.CreatureSpawner)
 local CreatureModelFactory = require(script.Creatures.CreatureModelFactory)
 local CombatSystem = require(script.Creatures.CombatSystem)
 local TamingSystem = require(script.Creatures.TamingSystem)
+local AnimalSystem = require(script.Creatures.AnimalSystem)
 local CraftingManager = require(script.Crafting.CraftingManager)
 local NPCManager = require(script.NPCs.NPCManager)
 local ProgressionManager = require(script.Progression.ProgressionManager)
@@ -70,6 +71,9 @@ local function createRemotes()
 		"Notification", "InventoryUpdate", "UseCampfire",
 		-- Class selection
 		"ClassSelected", "ShowClassSelection", "ShowBadges",
+		-- Animals / Food / Revive
+		"AttackAnimal", "HarvestFood", "CookFood",
+		"PlayerDowned", "PlayerRevived", "RobuxRevive", "TeammateRevive",
 	}
 
 	for _, name in events do
@@ -117,6 +121,7 @@ local inventoryManager = InventoryManager.new()
 local playerCharacter = PlayerCharacter.new()
 local sessionManager = SessionManager.new()
 local interactionSystem = InteractionSystem.new()
+local animalSystem = AnimalSystem.new()
 
 -- Track which players have selected a class this session
 local playerClassSelected = {} -- userId -> true
@@ -151,8 +156,25 @@ if lootFolder then
 	print("[99 Storms] Registered " .. #lootFolder:GetChildren() .. " loot containers")
 end
 
--- Track creature models
+-- Register animal spawn points from map
+local animalSpawnsFolder = stormhavenMap:FindFirstChild("AnimalSpawns")
+if animalSpawnsFolder then
+	for _, marker in animalSpawnsFolder:GetChildren() do
+		local configId = marker:GetAttribute("AnimalConfigId")
+		if configId then
+			animalSystem:registerSpawnPoint(configId, marker.Position)
+		end
+	end
+	animalSystem:spawnAll()
+	print("[99 Storms] Animal system initialized with spawn points")
+end
+
+-- Track models
+local animalModels = {} -- animalId -> Model
 local creatureModels = {} -- creatureId -> Model
+
+-- Food node respawn tracking
+local foodNodeRespawnQueue = {} -- { part, respawnAt }
 
 -- ================================
 -- DAY CYCLE CALLBACKS
@@ -359,11 +381,31 @@ end
 -- PLAYER CHARACTER CALLBACKS
 -- ================================
 
+-- Downed callback (player enters downed state, not fully dead)
+playerCharacter.onPlayerDowned = function(userId, source)
+	local player = Players:GetPlayerByUserId(userId)
+	if player then
+		remotes.PlayerDowned:FireClient(player, {
+			downedDuration = GameConfig.REVIVE.DOWNED_DURATION,
+			robuxCost = GameConfig.REVIVE.ROBUX_REVIVE_COST,
+			source = source,
+		})
+		-- Notify teammates
+		for _, otherPlayer in Players:GetPlayers() do
+			if otherPlayer.UserId ~= userId then
+				remotes.Notification:FireClient(otherPlayer, {
+					text = player.Name .. " is down! Use a Medical Kit to revive them!",
+					success = false,
+				})
+			end
+		end
+	end
+end
+
 playerCharacter.onPlayerDied = function(userId, source)
 	local player = Players:GetPlayerByUserId(userId)
 	if player then
 		sessionManager:recordDeath(player)
-		remotes.Notification:FireClient(player, { text = "You were defeated by " .. (source or "the storm") .. "! Respawning...", success = false })
 		for _, otherPlayer in Players:GetPlayers() do
 			if otherPlayer.UserId ~= userId then
 				local state = playerCharacter:getState(otherPlayer.UserId)
@@ -378,6 +420,7 @@ end
 playerCharacter.onPlayerRespawned = function(userId)
 	local player = Players:GetPlayerByUserId(userId)
 	if player then
+		remotes.PlayerRevived:FireClient(player)
 		remotes.Notification:FireClient(player, { text = "You have respawned.", success = true })
 	end
 end
@@ -584,6 +627,176 @@ remotes.UseCampfire.OnServerEvent:Connect(function(player)
 	end
 end)
 
+-- Attack Animal
+remotes.AttackAnimal.OnServerEvent:Connect(function(player, animalId)
+	local animal = animalSystem:getAnimal(animalId)
+	if not animal or not animal.isAlive then
+		remotes.Notification:FireClient(player, { text = "Nothing to attack", success = false })
+		return
+	end
+
+	-- Check range
+	local character = player.Character
+	if not character then return end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	local dist = (hrp.Position - animal.position).Magnitude
+	if dist > 12 then
+		remotes.Notification:FireClient(player, { text = "Too far away", success = false })
+		return
+	end
+
+	-- Deal weapon damage (base 10, more with better weapons)
+	local damage = 10
+	local inv = inventoryManager:getInventory(player.UserId)
+	if inv.storm_blade and inv.storm_blade > 0 then
+		damage = 35
+	elseif inv.iron_sword and inv.iron_sword > 0 then
+		damage = 25
+	elseif inv.wooden_club and inv.wooden_club > 0 then
+		damage = 15
+	end
+
+	local killed, drops = animalSystem:damageAnimal(animalId, damage, hrp.Position)
+
+	if killed then
+		-- Give drops
+		if drops then
+			for _, drop in drops do
+				inventoryManager:addItem(player.UserId, drop[1], drop[2])
+			end
+		end
+		-- Destroy model
+		if animalModels[animalId] then
+			animalModels[animalId]:Destroy()
+			animalModels[animalId] = nil
+		end
+		remotes.Notification:FireClient(player, { text = animal.name .. " defeated! Got loot.", success = true })
+		remotes.InventoryUpdate:FireClient(player, inventoryManager:getInventory(player.UserId))
+	else
+		remotes.Notification:FireClient(player, { text = "Hit " .. animal.name .. "! (" .. animal.hp .. " HP left)", success = true })
+	end
+end)
+
+-- Harvest Food Node (berry bush, mushroom patch)
+remotes.HarvestFood.OnServerEvent:Connect(function(player, foodNodeName)
+	local foodNodesFolder = stormhavenMap:FindFirstChild("FoodNodes")
+	if not foodNodesFolder then return end
+
+	local node = foodNodesFolder:FindFirstChild(foodNodeName)
+	if not node then
+		remotes.Notification:FireClient(player, { text = "Food node not found", success = false })
+		return
+	end
+
+	if node:GetAttribute("IsHarvested") then
+		remotes.Notification:FireClient(player, { text = "Already harvested. Wait for it to regrow.", success = false })
+		return
+	end
+
+	-- Check range
+	local character = player.Character
+	if not character then return end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local dist = (hrp.Position - node.Position).Magnitude
+	if dist > 10 then
+		remotes.Notification:FireClient(player, { text = "Too far away", success = false })
+		return
+	end
+
+	local foodItem = node:GetAttribute("FoodItem")
+	if not foodItem then return end
+
+	local amount = math.random(1, 3)
+	local added = inventoryManager:addItem(player.UserId, foodItem, amount)
+
+	if added > 0 then
+		node:SetAttribute("IsHarvested", true)
+		node.Transparency = 0.7
+		-- Queue respawn (60 seconds)
+		table.insert(foodNodeRespawnQueue, { part = node, respawnAt = tick() + 60 })
+		local displayName = foodItem:gsub("_", " ")
+		remotes.Notification:FireClient(player, { text = "Gathered " .. added .. "x " .. displayName, success = true })
+		remotes.InventoryUpdate:FireClient(player, inventoryManager:getInventory(player.UserId))
+	else
+		remotes.Notification:FireClient(player, { text = "Inventory full", success = false })
+	end
+end)
+
+-- Cook Food at campfire/stove
+remotes.CookFood.OnServerEvent:Connect(function(player, rawItemId)
+	local foodData = GameConfig.FOOD_VALUES[rawItemId]
+	if not foodData or not foodData.cookResult then
+		remotes.Notification:FireClient(player, { text = "Cannot cook that item", success = false })
+		return
+	end
+
+	if not inventoryManager:hasItem(player.UserId, rawItemId, 1) then
+		remotes.Notification:FireClient(player, { text = "You don't have any " .. rawItemId:gsub("_", " "), success = false })
+		return
+	end
+
+	inventoryManager:removeItem(player.UserId, rawItemId, 1)
+	inventoryManager:addItem(player.UserId, foodData.cookResult, 1)
+
+	local cookedName = foodData.cookResult:gsub("_", " ")
+	remotes.Notification:FireClient(player, { text = "Cooked: " .. cookedName, success = true })
+	remotes.InventoryUpdate:FireClient(player, inventoryManager:getInventory(player.UserId))
+end)
+
+-- Robux Self-Revive
+remotes.RobuxRevive.OnServerEvent:Connect(function(player)
+	local state = playerCharacter:getState(player.UserId)
+	if not state or not state.isDowned then return end
+
+	-- In a real game, you'd verify the Robux purchase via MarketplaceService
+	-- For now, just revive
+	playerCharacter:robuxRevive(state)
+	remotes.PlayerRevived:FireClient(player)
+	remotes.Notification:FireClient(player, { text = "Revived!", success = true })
+end)
+
+-- Teammate Revive
+remotes.TeammateRevive.OnServerEvent:Connect(function(player, targetUserId)
+	local targetState = playerCharacter:getState(targetUserId)
+	if not targetState or not targetState.isDowned then
+		remotes.Notification:FireClient(player, { text = "Player is not downed", success = false })
+		return
+	end
+
+	-- Check range
+	local character = player.Character
+	local targetPlayer = Players:GetPlayerByUserId(targetUserId)
+	if not character or not targetPlayer or not targetPlayer.Character then return end
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	local targetHrp = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp or not targetHrp then return end
+
+	local dist = (hrp.Position - targetHrp.Position).Magnitude
+	if dist > GameConfig.REVIVE.TEAMMATE_REVIVE_RANGE then
+		remotes.Notification:FireClient(player, { text = "Too far away to revive", success = false })
+		return
+	end
+
+	-- Consume medical kit
+	local reviveItem = GameConfig.REVIVE.TEAMMATE_REVIVE_ITEM
+	if not inventoryManager:hasItem(player.UserId, reviveItem, 1) then
+		remotes.Notification:FireClient(player, { text = "Need a " .. reviveItem:gsub("_", " ") .. " to revive", success = false })
+		return
+	end
+
+	inventoryManager:removeItem(player.UserId, reviveItem, 1)
+	playerCharacter:revive(targetState)
+
+	remotes.PlayerRevived:FireClient(targetPlayer)
+	remotes.Notification:FireClient(player, { text = "Revived " .. targetPlayer.Name .. "!", success = true })
+	remotes.Notification:FireClient(targetPlayer, { text = player.Name .. " revived you!", success = true })
+	remotes.InventoryUpdate:FireClient(player, inventoryManager:getInventory(player.UserId))
+end)
+
 -- RemoteFunctions
 remotes.GetGameState.OnServerInvoke = function(player)
 	return {
@@ -744,15 +957,88 @@ RunService.Heartbeat:Connect(function(deltaTime)
 		exposureTimer = 0
 	end
 
+	-- Update animals (always running, not just during storms)
+	animalSystem:update(deltaTime)
+
+	-- Create/update animal models
+	for id, animal in animalSystem.animals do
+		if animal.isAlive then
+			if not animalModels[id] then
+				animalModels[id] = animalSystem:createModel(id, workspace:FindFirstChild("Stormhaven") or workspace)
+			else
+				animalSystem:updateModel(animalModels[id], id)
+			end
+		end
+	end
+
+	-- Clean up dead animal models
+	for id, model in animalModels do
+		if not animalSystem.animals[id] or not animalSystem.animals[id].isAlive then
+			model:Destroy()
+			animalModels[id] = nil
+		end
+	end
+
+	-- Food node respawn
+	local now = tick()
+	local remainingFood = {}
+	for _, entry in foodNodeRespawnQueue do
+		if now >= entry.respawnAt then
+			entry.part:SetAttribute("IsHarvested", false)
+			entry.part.Transparency = 0
+		else
+			table.insert(remainingFood, entry)
+		end
+	end
+	foodNodeRespawnQueue = remainingFood
+
 	-- Regenerate barriers during daytime
 	if dayCycleManager.phase == "daytime" then
 		structureManager:regenerateBarriers(deltaTime)
 	end
 
-	-- Shelter detection for all players
+	-- Shelter and campfire proximity detection for all players
 	for _, player in Players:GetPlayers() do
 		local isSheltered = weatherEffects:isPlayerSheltered(player)
 		playerCharacter:setSheltered(player.UserId, isSheltered)
+
+		-- Campfire proximity check
+		local isNearFire = false
+		local character = player.Character
+		if character then
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				local campfireRange = GameConfig.CAMPFIRE.PROXIMITY_RANGE
+				-- Check all campfires in the map
+				local campfiresFolder = stormhavenMap:FindFirstChild("Campfires")
+				local lighthouseFolder = stormhavenMap:FindFirstChild("Lighthouse")
+
+				local allCampfires = {}
+				if campfiresFolder then
+					for _, part in campfiresFolder:GetChildren() do
+						if part:GetAttribute("InteractType") == "Campfire" then
+							table.insert(allCampfires, part)
+						end
+					end
+				end
+				if lighthouseFolder then
+					for _, part in lighthouseFolder:GetChildren() do
+						if part:GetAttribute("InteractType") == "Campfire" then
+							table.insert(allCampfires, part)
+						end
+					end
+				end
+
+				for _, campfire in allCampfires do
+					local dist = (hrp.Position - campfire.Position).Magnitude
+					if dist <= campfireRange then
+						isNearFire = true
+						break
+					end
+				end
+			end
+		end
+		playerCharacter:setNearCampfire(player.UserId, isNearFire)
 	end
 
 	-- Broadcast player stats periodically

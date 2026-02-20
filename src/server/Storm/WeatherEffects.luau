@@ -43,6 +43,8 @@ function WeatherEffects:applyStormEffects(stormType: string, intensity: number)
 		self:applyTornado(intensity)
 	elseif stormType == "tsunami" then
 		self:applyTsunami(intensity)
+	elseif stormType == "snowstorm" then
+		self:applySnowstorm(intensity)
 	elseif stormType == "blood_storm" then
 		self:applyBloodStorm(intensity)
 	elseif stormType == "tempest_wrath" then
@@ -133,6 +135,22 @@ function WeatherEffects:applyTsunami(intensity: number)
 		floodSpeed = 2 * intensity, -- studs per second water rises
 		drownDamage = 10, -- per second while submerged
 		currentStrength = 5 * intensity, -- push force in water
+	}
+end
+
+function WeatherEffects:applySnowstorm(intensity: number)
+	self.visibility = math.max(0.3, 0.7 - (intensity * 0.15))
+	self.windStrength = 10 * intensity
+	self.windDirection = Vector3.new(math.random() - 0.5, 0, math.random() - 0.5).Unit
+	self.temperature = math.max(0, 0.1 - (intensity * 0.05))
+
+	self.activeEffects = {
+		snow = true,
+		snowDensity = 0.6 + (intensity * 0.2),
+		freezeDamage = 2 * intensity, -- per second when outside without warmth
+		staminaDrainMultiplier = 1.5 + (intensity * 0.3), -- stamina drains faster
+		movementSlow = 0.15 * intensity, -- movement reduction outside
+		iceBuildUp = true,
 	}
 end
 
