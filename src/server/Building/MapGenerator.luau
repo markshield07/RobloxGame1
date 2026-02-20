@@ -1026,7 +1026,7 @@ function MapGenerator.generate(resourceSystem)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "MainSpawn"
 	spawn.Size = Vector3.new(8, 1, 8)
-	spawn.Position = Vector3.new(25, 1, 105)
+	spawn.Position = Vector3.new(0, 2, 50)
 	spawn.Color = Color3.fromRGB(100, 200, 100)
 	spawn.Material = Enum.Material.Neon
 	spawn.Transparency = 0.5
