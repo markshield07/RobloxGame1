@@ -29,7 +29,7 @@ local DEFAULT_DATA = {
 	totalBuildingsRepaired = 0,
 	totalFishCaught = 0,
 	totalItemsCrafted = 0,
-	totalAnimalsТamed = 0,
+	totalAnimalsTamed = 0,
 	bestStormReached = 0,
 	fastestCompletion = 0, -- seconds (0 = never completed)
 
